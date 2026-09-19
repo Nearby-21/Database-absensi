@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts: Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- jsQR Library for Real-time QR Code Detection -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -37,7 +39,6 @@
         <!-- ================= PAGE 1: BERANDA ================= -->
         <div id="page-beranda" class="flex flex-col flex-grow pb-8">
             
-            <!-- Modern & Professional Header -->
             <div class="relative bg-gradient-to-br from-indigo-700 via-indigo-600 to-blue-600 text-white p-5 sm:p-6 rounded-b-[2.2rem] shadow-lg overflow-hidden">
                 <div class="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
                 <div class="absolute right-20 -bottom-10 w-32 h-32 bg-blue-400/20 rounded-full blur-xl pointer-events-none"></div>
@@ -66,7 +67,6 @@
                 </div>
             </div>
 
-            <!-- Content Area -->
             <div class="px-4 sm:px-5 pt-5 space-y-5">
 
                 <!-- Statistic Cards -->
@@ -172,7 +172,7 @@
             </div>
         </div>
 
-        <!-- ================= PAGE 2: SCANNER (QR ABSEN & KAMERA SELECTION) ================= -->
+        <!-- ================= PAGE 2: SCANNER (QR ABSEN & REAL-TIME jsqr DETECTION) ================= -->
         <div id="page-scanner" class="hidden flex flex-col flex-grow p-4 sm:p-5 justify-between">
             <div class="space-y-4">
                 <div class="text-center pt-2">
@@ -180,7 +180,7 @@
                         <i class="fa-solid fa-camera text-lg"></i>
                     </div>
                     <h2 class="text-lg sm:text-xl font-bold text-slate-800">Scan QR / Konfirmasi NIS</h2>
-                    <p class="text-[11px] sm:text-xs text-slate-500 mt-0.5">Pilih sesi, scan QR atau konfirmasi NIS jika tanpa QR.</p>
+                    <p class="text-[11px] sm:text-xs text-slate-500 mt-0.5">Arahkan QR Code ke kamera atau ketik NIS secara manual.</p>
                 </div>
 
                 <div class="bg-slate-50 p-2.5 rounded-2xl border border-slate-200/80 flex items-center justify-around">
@@ -208,25 +208,28 @@
                 </div>
 
                 <div class="relative bg-slate-900 rounded-2xl overflow-hidden shadow-inner aspect-[4/3] flex items-center justify-center">
-                    <video id="camera-preview" autoplay playsinline class="absolute inset-0 w-full h-full object-cover opacity-90"></video>
+                    <video id="camera-preview" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover opacity-90"></video>
+                    <!-- Hidden canvas for jsQR frame sampling -->
+                    <canvas id="qr-canvas" class="hidden"></canvas>
+                    
                     <div id="camera-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-white/70 bg-slate-800">
                         <i class="fa-solid fa-spinner fa-spin text-xl mb-1.5"></i>
                         <span class="text-xs">Menyiapkan Kamera...</span>
                     </div>
 
-                    <div class="absolute w-44 h-44 border-2 border-white/80 rounded-lg pointer-events-none flex flex-col justify-between p-2 shadow-2xl">
+                    <div class="absolute w-44 h-44 border-2 border-emerald-400/90 rounded-xl pointer-events-none flex flex-col justify-between p-2 shadow-2xl animate-pulse">
                         <div class="flex justify-between">
-                            <div class="w-5 h-5 border-t-4 border-l-4 border-white"></div>
-                            <div class="w-5 h-5 border-t-4 border-r-4 border-white"></div>
+                            <div class="w-5 h-5 border-t-4 border-l-4 border-emerald-400"></div>
+                            <div class="w-5 h-5 border-t-4 border-r-4 border-emerald-400"></div>
                         </div>
                         <div class="flex justify-between">
-                            <div class="w-5 h-5 border-b-4 border-l-4 border-white"></div>
-                            <div class="w-5 h-5 border-b-4 border-r-4 border-white"></div>
+                            <div class="w-5 h-5 border-b-4 border-l-4 border-emerald-400"></div>
+                            <div class="w-5 h-5 border-b-4 border-r-4 border-emerald-400"></div>
                         </div>
                     </div>
 
                     <div class="absolute top-2 right-2 text-white/80 bg-black/40 px-2 py-0.5 rounded text-[10px] backdrop-blur-sm">
-                        <i class="fa-solid fa-circle-info mr-1"></i> Live
+                        <i class="fa-solid fa-circle-dot text-emerald-400 mr-1 animate-ping"></i> Auto QR Scanner
                     </div>
                 </div>
 
@@ -380,7 +383,7 @@
             </div>
         </div>
 
-        <!-- ================= PAGE 5: REKAP ABSEN (WITH DATE COLUMN, FILTER & SPREADSHEET EXPORT) ================= -->
+        <!-- ================= PAGE 5: REKAP ABSEN ================= -->
         <div id="page-rekap-absen" class="hidden flex flex-col flex-grow p-4 sm:p-6 space-y-4">
             <div>
                 <div class="flex items-center space-x-3 mb-1">
@@ -642,7 +645,6 @@
         <span id="toast-message" class="leading-relaxed">Berhasil menyimpan data</span>
     </div>
 
-    <!-- JavaScript Application Logic -->
     <script>
         let santriData = [
             { nis: "1001", name: "Gandhi", category: "Malem", wa: "625680837434", statusHadir: true, statusKeterangan: "Hadir", tanggal: "2026-09-19" },
@@ -651,6 +653,8 @@
 
         let mediaStream = null;
         let isScanningActive = true;
+        let lastScannedCode = "";
+        let scanCooldown = false;
 
         // Page Navigation
         function switchPage(pageId) {
@@ -1068,16 +1072,9 @@
             document.getElementById('new-santri-wa').value = '';
         }
 
-        // Process Manual NIS Confirmation (When santri doesn't have QR)
-        function prosesKonfirmasiNis() {
-            const nis = document.getElementById('manual-nis-input').value.trim();
+        // Process Manual NIS Confirmation or QR detection trigger
+        function triggerWaBotModal(nis) {
             const sesi = document.querySelector('input[name="sesi_absen"]:checked').value;
-
-            if (!nis) {
-                showToast("Masukkan NIS terlebih dahulu untuk konfirmasi!", "error");
-                return;
-            }
-
             const santri = santriData.find(s => s.nis === nis);
             if (!santri) {
                 showToast(`Santri dengan NIS ${nis} tidak ditemukan dalam database!`, "error");
@@ -1098,6 +1095,15 @@
             document.getElementById('wa-modal-preview').textContent = pesan;
 
             openModal('modal-wa-bot');
+        }
+
+        function prosesKonfirmasiNis() {
+            const nis = document.getElementById('manual-nis-input').value.trim();
+            if (!nis) {
+                showToast("Masukkan NIS terlebih dahulu untuk konfirmasi!", "error");
+                return;
+            }
+            triggerWaBotModal(nis);
             document.getElementById('manual-nis-input').value = '';
         }
 
@@ -1155,12 +1161,12 @@
             showToast(`Status ${santri.name} diperbarui: ${status}`);
         }
 
-        // Functional Camera Stream handling user / environment (back) camera
+        // Camera Stream & jsQR Real-time Scanning Loop
         async function startCameraStream() {
             stopCameraStream();
             const videoEl = document.getElementById('camera-preview');
             const placeholder = document.getElementById('camera-placeholder');
-            const facingModeChoice = document.getElementById('camera-select').value; // 'user' or 'environment'
+            const facingModeChoice = document.getElementById('camera-select').value; // 'environment' or 'user'
             
             try {
                 const constraints = {
@@ -1168,7 +1174,6 @@
                     audio: false
                 };
                 
-                // Fallback constraint if exact facingMode isn't supported on some desktop browsers
                 let stream;
                 try {
                     stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -1181,6 +1186,9 @@
                 placeholder.style.display = 'none';
                 isScanningActive = true;
                 document.getElementById('btn-toggle-cam').textContent = "Stop Scanning";
+                
+                // Start scanning frames for QR codes
+                requestAnimationFrame(scanQRCodeLoop);
             } catch (err) {
                 console.warn("Kamera tidak dapat diakses:", err);
                 placeholder.style.display = 'flex';
@@ -1188,7 +1196,50 @@
             }
         }
 
+        function scanQRCodeLoop() {
+            if (!isScanningActive || !mediaStream) return;
+
+            const video = document.getElementById('camera-preview');
+            const canvas = document.getElementById('qr-canvas');
+            
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const canvasCtx = canvas.getContext('2d', { willReadFrequently: true });
+                canvasCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                const imageData = canvasCtx.getImageData(0, 0, canvas.width, canvas.height);
+                const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: "dontInvert",
+                });
+
+                if (qrCode && !scanCooldown) {
+                    const scannedText = qrCode.data.trim();
+                    console.log("QR Detected via jsQR:", scannedText);
+                    
+                    // Check if detected text matches any Santri NIS
+                    const foundSantri = santriData.find(s => s.nis === scannedText || scannedText.includes(s.nis));
+                    if (foundSantri) {
+                        scanCooldown = true;
+                        if (navigator.vibrate) navigator.vibrate(200);
+                        showToast(`QR Code Terdeteksi: NIS ${foundSantri.nis} (${foundSantri.name})`);
+                        triggerWaBotModal(foundSantri.nis);
+                        
+                        // Reset cooldown after 4 seconds
+                        setTimeout(() => {
+                            scanCooldown = false;
+                        }, 4000);
+                    }
+                }
+            }
+
+            if (isScanningActive) {
+                requestAnimationFrame(scanQRCodeLoop);
+            }
+        }
+
         function stopCameraStream() {
+            isScanningActive = false;
             if (mediaStream) {
                 mediaStream.getTracks().forEach(track => track.stop());
                 mediaStream = null;
@@ -1206,15 +1257,12 @@
                 placeholder.style.display = 'flex';
                 placeholder.innerHTML = `<i class="fa-solid fa-video-slash text-xl mb-1"></i><span class="text-xs">Scanner Dijeda</span>`;
                 btn.textContent = "Start Scanning";
-                isScanningActive = false;
             } else {
                 startCameraStream();
-                isScanningActive = true;
                 btn.textContent = "Stop Scanning";
             }
         }
 
-        // Switch camera via dropdown selection
         function changeCamera() {
             showToast("Beralih sudut pandang kamera...", "success");
             startCameraStream();
