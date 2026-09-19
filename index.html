@@ -172,7 +172,7 @@
             </div>
         </div>
 
-        <!-- ================= PAGE 2: SCANNER (QR ABSEN) ================= -->
+        <!-- ================= PAGE 2: SCANNER (QR ABSEN & KAMERA SELECTION) ================= -->
         <div id="page-scanner" class="hidden flex flex-col flex-grow p-4 sm:p-5 justify-between">
             <div class="space-y-4">
                 <div class="text-center pt-2">
@@ -180,7 +180,7 @@
                         <i class="fa-solid fa-camera text-lg"></i>
                     </div>
                     <h2 class="text-lg sm:text-xl font-bold text-slate-800">Scan QR / Konfirmasi NIS</h2>
-                    <p class="text-[11px] sm:text-xs text-slate-500 mt-0.5">Pilih sesi, scan QR atau ketik NIS jika tidak membawa QR.</p>
+                    <p class="text-[11px] sm:text-xs text-slate-500 mt-0.5">Pilih sesi, scan QR atau konfirmasi NIS jika tanpa QR.</p>
                 </div>
 
                 <div class="bg-slate-50 p-2.5 rounded-2xl border border-slate-200/80 flex items-center justify-around">
@@ -230,11 +230,13 @@
                     </div>
                 </div>
 
+                <!-- Functional Camera Selection Dropdown -->
                 <div class="flex items-center justify-between text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200/60">
-                    <div class="flex items-center space-x-1.5 truncate">
-                        <span class="font-medium text-slate-700 truncate" id="camera-label">Select Camera (4)</span>
-                        <select id="camera-select" onchange="changeCamera()" class="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-700 max-w-[120px] truncate focus:outline-none">
-                            <option value="">USB Camera</option>
+                    <div class="flex items-center space-x-2 truncate">
+                        <span class="font-medium text-slate-700 truncate">Kamera:</span>
+                        <select id="camera-select" onchange="changeCamera()" class="bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:border-indigo-500 font-medium cursor-pointer">
+                            <option value="environment" selected>Kamera Belakang (Environment)</option>
+                            <option value="user">Kamera Depan (User)</option>
                         </select>
                     </div>
                     <button onclick="toggleCameraScanning()" id="btn-toggle-cam" class="bg-white hover:bg-slate-100 text-slate-700 font-medium px-3 py-1.5 rounded-lg border border-slate-300 shadow-xs transition-colors cursor-pointer text-xs">
@@ -378,7 +380,7 @@
             </div>
         </div>
 
-        <!-- ================= PAGE 5: REKAP ABSEN ================= -->
+        <!-- ================= PAGE 5: REKAP ABSEN (WITH DATE COLUMN, FILTER & SPREADSHEET EXPORT) ================= -->
         <div id="page-rekap-absen" class="hidden flex flex-col flex-grow p-4 sm:p-6 space-y-4">
             <div>
                 <div class="flex items-center space-x-3 mb-1">
@@ -1153,18 +1155,35 @@
             showToast(`Status ${santri.name} diperbarui: ${status}`);
         }
 
+        // Functional Camera Stream handling user / environment (back) camera
         async function startCameraStream() {
+            stopCameraStream();
             const videoEl = document.getElementById('camera-preview');
             const placeholder = document.getElementById('camera-placeholder');
+            const facingModeChoice = document.getElementById('camera-select').value; // 'user' or 'environment'
             
             try {
-                mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+                const constraints = {
+                    video: { facingMode: { exact: facingModeChoice } },
+                    audio: false
+                };
+                
+                // Fallback constraint if exact facingMode isn't supported on some desktop browsers
+                let stream;
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (err) {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facingModeChoice }, audio: false });
+                }
+
+                mediaStream = stream;
                 videoEl.srcObject = mediaStream;
                 placeholder.style.display = 'none';
                 isScanningActive = true;
                 document.getElementById('btn-toggle-cam').textContent = "Stop Scanning";
             } catch (err) {
                 console.warn("Kamera tidak dapat diakses:", err);
+                placeholder.style.display = 'flex';
                 placeholder.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-400 text-xl mb-1"></i><span class="text-[11px] text-center px-4">Kamera tidak aktif / izin diblokir browser</span>`;
             }
         }
@@ -1175,7 +1194,7 @@
                 mediaStream = null;
             }
             const videoEl = document.getElementById('camera-preview');
-            videoEl.srcObject = null;
+            if (videoEl) videoEl.srcObject = null;
         }
 
         function toggleCameraScanning() {
@@ -1195,8 +1214,10 @@
             }
         }
 
+        // Switch camera via dropdown selection
         function changeCamera() {
-            showToast("Beralih perangkat kamera...", "success");
+            showToast("Beralih sudut pandang kamera...", "success");
+            startCameraStream();
         }
 
         window.onload = function() {
